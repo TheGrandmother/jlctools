@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, fields
 import json
 from typing import Any, List, cast
 
@@ -38,6 +38,9 @@ class Price(BaseModel):
 
 @dataclass
 class Component(BaseModel):
+
+    _out_of_date = False
+
     allowPostFlag: bool
     attributes: None
     canPresaleNumber: int
@@ -89,11 +92,20 @@ class Component(BaseModel):
     secondSortName: None
     stockCount: int
     urlSuffix: str
+    minImageAccessId: None
+    dataManualOfficialLink: str
+    productBigImageAccessId: None
 
     def __post_init__(self):
         super(Component).__init__()
+
+        def defaff(l):
+            field_names = [f.name for f in fields(Price)]
+            d = {k: v for (k, v) in cast(dict, l).items() if k in field_names}
+            return d
+
         self.componentPrices = sorted(
-            [Price(**cast(dict, l)) for l in self.componentPrices],
+            [Price(**defaff(l)) for l in self.componentPrices],
             key=lambda p: p.productPrice,
         )
 
@@ -103,19 +115,37 @@ class Component(BaseModel):
         )
 
     def __str__(self):
+        def format_attr(attributes):
+            if type(attributes) == str:
+                return attributes
+            longest = max(
+                len(a.get("attribute_name_en", "")) for a in attributes
+            )
+            return "\n".join(
+                [
+                    f'  {(a["attribute_name_en"]+":").ljust(longest + 1, " ")} {a["attribute_value_name"]}'
+                    for a in attributes
+                    if "attribute_name_en" in a
+                ]
+            )
+
         something = [
             f"Comp\t{self.componentModelEn}",
+            f"Type\t{self.componentTypeEn}",
             f"Name\t{self.componentName}",
-            f"Desc\t{self.describe}",
             f"Spec\t{self.componentSpecificationEn}",
             f"LCSC\t{self.componentCode}",
             f"Price\t{self.componentPrices[0].productPrice}",
             f"Count\t{self.stockCount}",
-            f"Attr\t{self.attributes}",
             f"Link\thttps://jlcpcb.com/partdetail/{self.urlSuffix}",
         ]
+        if self.attributes is not None:
+            something += [f"Attr\t\n{format_attr(self.attributes)}"]
+        else:
+            something += [f"Desc\t{self.describe}"]
+
         if self.preferredComponentFlag:
-            something += ["Is preffered"]
+            something += ["  Is preffered"]
         if self.noBuyReason is not None:
             something += [self.noBuyReason]
         return "\n".join(something)
@@ -144,4 +174,19 @@ class Response:
 
     def __post_init__(self):
         super(Response).__init__()
-        self.list = [Component(**cast(dict, l)) for l in self.list]
+
+        # dataclasses are the best thing ever....
+        def defaff(l):
+            field_names = [f.name for f in fields(Component)]
+            raw_dict = cast(dict, l)
+            d = {k: v for (k, v) in raw_dict.items() if k in field_names}
+            diff = set(raw_dict.keys()) - set(field_names)
+            if len(diff) != 0 and not Component._out_of_date:
+                Component._out_of_date = True
+                diff_types = [(n, type(raw_dict[n])) for n in diff]
+                print(
+                    f"WARNING: Component schema out of date. Additional fields: \n{diff_types}"
+                )
+            return d
+
+        self.list = [Component(**defaff(l)) for l in self.list]
