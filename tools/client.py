@@ -50,7 +50,7 @@ class Cache:
             print("Creating cache folder")
             makedirs(CACHE_PATH)
         if not path.exists(self.file_path):
-            open(self.file_path, "r+").close()
+            open(self.file_path, "w+").close()
         try:
             with open(self.file_path, "r") as f:
                 self.dict = json.load(f)
@@ -90,10 +90,11 @@ def get_by_code(code):
         list_endpoint, json=body_builder(code, base=False, extended=False)
     )
     resp = Response(**mjau.json()["data"]["componentPageInfo"])
-    if resp.total != 1:
-        raise Exception(f"Got {resp.total} results fetching {code}")
-    cache.write(code, resp.list[0])
-    return resp.list[0]
+    matching = list(filter(lambda c: c.componentCode == code, resp.list))
+    if len(matching) != 1:
+        raise Exception(f"Got {len(matching)} results with code {code}")
+    cache.write(code, matching[0])
+    return matching[0]
 
 
 def search(keyword, case="", base=True, count=1, min_stock=100):
@@ -107,6 +108,10 @@ def search(keyword, case="", base=True, count=1, min_stock=100):
             min_stock=min_stock,
         ),
     )
-    resp = Response(**mjau.json()["data"]["componentPageInfo"])
+    resp_json = mjau.json()["data"]["componentPageInfo"]
+    if resp_json["total"] == 0:
+        print(f"No {'basic' if base else ''} parts found for {keyword}")
+        quit(1)
+    resp = Response(**resp_json)
     separator = "\n" + ("=" * 10) + "\n"
     print(separator.join(map(str, resp.list[:count])))

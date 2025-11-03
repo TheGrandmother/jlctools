@@ -95,6 +95,13 @@ class Component(BaseModel):
     minImageAccessId: None
     dataManualOfficialLink: str
     productBigImageAccessId: None
+    shopShowPriceFlag: bool
+    rohsFlag: None
+    componentSpecificationHigh: None
+    shopRealPriceFlag: bool
+    assemblyComponentFlag: bool
+    shopShowForeignPriceFlag: bool
+    componentCodeHigh: str
 
     def __post_init__(self):
         super(Component).__init__()
